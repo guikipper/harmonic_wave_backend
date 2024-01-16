@@ -15,6 +15,10 @@ class DataController {
         const collection = await getCollection('Users', 'LearnMusicDatabase')
     }
 
+    async home(req, res) {
+        return res.status(200).json({message: 'Ok'})
+    }
+
     async createUser (req, res) { 
         const userId = new ObjectId();
         try {
@@ -93,47 +97,54 @@ class DataController {
       
     }
 
+    async getLogin(req, res) {
+        return res.status(200).json({login: 'Ok'})
+    }
+
     async login(req, res) {
+        
         const { email, password } = req.body
-       
+        console.log("Entrou em login: ", email)
+
         const collection = await getCollection('Users', 'LearnMusicDatabase');
         const existingUser = await collection.findOne({ email });
-
-        if (existingUser) {
-            console.log(existingUser)
-            if (existingUser.emailVerified === true) {
-                const isMatch = await bcrypt.compare(req.body.password, existingUser.password);
-            
-            if (isMatch) {
-                return res.status(201).json(
-                    { 
-                    statusCode: 201, 
-                    message: 'Usuário autenticado!',
-                    userId: existingUser._id,
-                    email: email, 
-                    username: existingUser.name, 
-                });
-            } else {
-                return res.status(201).json(
-                    { 
-                    statusCode: 206, 
-                    message: 'Email e/ou senha incorretos!',
-                });
-            }
-            } else {
-                return res.status(201).json(
-                    { 
-                    statusCode: 204, 
-                    message: 'Endereço de Email não verificado!',
-                });
-            }
-            
-        } else {
-            return res.json(
-                {statusCode: 205,
-                message: 'Usuário não cadastrado!'}
-            )
-        }
+        console.log(collection)
+        console.log(existingUser)
+       if (existingUser) {
+           console.log(existingUser)
+           if (existingUser.emailVerified === true) {
+               const isMatch = await bcrypt.compare(req.body.password, existingUser.password);
+           
+           if (isMatch) {
+               return res.status(201).json(
+                   { 
+                   statusCode: 201, 
+                   message: 'Usuário autenticado!',
+                   userId: existingUser._id,
+                   email: email, 
+                   username: existingUser.name, 
+               });
+           } else {
+               return res.status(201).json(
+                   { 
+                   statusCode: 206, 
+                   message: 'Email e/ou senha incorretos!',
+               });
+           }
+           } else {
+               return res.status(201).json(
+                   { 
+                   statusCode: 204, 
+                   message: 'Endereço de Email não verificado!',
+               });
+           }
+           
+       } else {
+           return res.json(
+               {statusCode: 205,
+               message: 'Usuário não cadastrado!'}
+           )
+       }
     }
 
    
