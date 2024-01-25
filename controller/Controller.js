@@ -15,10 +15,6 @@ class DataController {
         const collection = await getCollection('Users', 'LearnMusicDatabase')
     }
 
-    async home(req, res) {
-        return res.status(200).json({message: 'Ok'})
-    }
-
     async createUser (req, res) { 
         const userId = new ObjectId();
         try {
@@ -97,21 +93,13 @@ class DataController {
       
     }
 
-    async getLogin(req, res) {
-        return res.status(200).json({login: 'Ok'})
-    }
-
     async login(req, res) {
         
         const { email, password } = req.body
-        console.log("Entrou em login: ", email)
 
         const collection = await getCollection('Users', 'LearnMusicDatabase');
         const existingUser = await collection.findOne({ email });
-        console.log(collection)
-        console.log(existingUser)
        if (existingUser) {
-           console.log(existingUser)
            if (existingUser.emailVerified === true) {
                const isMatch = await bcrypt.compare(req.body.password, existingUser.password);
            
@@ -145,6 +133,49 @@ class DataController {
                message: 'Usuário não cadastrado!'}
            )
        }
+    }
+
+    async changeName(req, res) {
+        const collection = await getCollection('Users', 'LearnMusicDatabase');
+        const userId = req.body.userId
+        const newName = req.body.newName
+        const oldName = req.body.name
+
+        const filter = { _id: new ObjectId(userId) };
+        const update = {
+            $set: {
+                name: newName,
+                oldName: oldName
+            },
+        };
+
+        const result = await collection.findOneAndUpdate(
+            filter, 
+            update,  
+            {
+            returnDocument: 'after',
+            upsert: false             // Não criar um novo documento se nenhum for encontrado
+        });
+
+
+        //checar
+        if(!result) {
+            console.log("Entrou em erro pq nao tem result")
+            return res.status(501).json({
+                message: "Deu erro parceiro!"
+            })
+        }
+
+        const userDataResponse = {
+            name: result.name
+        }
+
+        return res.status(201).json(
+            { 
+            statusCode: 201, 
+            message: 'Nome alterado com sucesso!',
+            newName: userDataResponse.name
+        });
     }
 
    

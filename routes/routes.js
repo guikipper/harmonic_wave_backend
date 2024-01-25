@@ -5,9 +5,7 @@ const dataController = require('../controller/Controller')
 router.post('/createUser', dataController.createUser.bind(dataController))
 router.post('/login', dataController.login)
 router.post('/validate/:token', dataController.validateLink)
-
-router.get('/', dataController.home)
-router.get('/login', dataController.getLogin)
+router.post('/changeName', dataController.changeName)
 
 module.exports = router
 
