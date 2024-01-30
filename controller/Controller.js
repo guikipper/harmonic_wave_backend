@@ -179,19 +179,15 @@ class DataController {
   async changePassword(req, res) {
     const collection = await getCollection("Users", "LearnMusicDatabase");
     const { userId, password, newPassword } = req.body;
-
     const user = await collection.findOne({ _id: new ObjectId(userId) });
-    console.log(user)
-    const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("O que quero: ", hashedPassword)
-      
-    console.log("oq preciso: ", hashedPassword)
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log('A SENHA: ', password)
+      console.log('O userID: ', userId)
+      console.log(req.body)
+    console.log("Deu match? ", isMatch)
     if (isMatch) {
-        console.log("Deu match")
+
       const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-    
-      
       const filter = { _id: new ObjectId(userId) };
       const update = {
         $set: {
@@ -209,7 +205,7 @@ class DataController {
           message: "Erro ao alterar a senha do usuário!",
         });
       }
-  
+      console.log("Senha alterada com sucesso!")
       return res.status(201).json({
         statusCode: 201,
         message: "Senha alterada com sucesso!",
@@ -222,6 +218,41 @@ class DataController {
           });
     }
   }
+
+  async deleteAccount(req, res) {
+    try {
+      const collection = await getCollection("Users", "LearnMusicDatabase");
+      const { password, userId } = req.body
+      
+      
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      console.log(req.body)
+      console.log(user)
+      console.log('a senha do usuário: ', user.password)
+      const isMatch = await bcrypt.compare(password, user.password);
+      console.log("Deu match? ", isMatch)
+    
+      if (isMatch) {
+        const result = await collection.deleteOne({ _id: new ObjectId(userId) })
+        console.log(`${result.deletedCount} documento(s) deletado(s)`);
+        return res.status(201).json({
+          statusCode: 201,
+          message: "Usuário deletado com sucesso!"
+        })
+      } else {
+        console.log("Senha inválida!")
+        return res.status(201).json({
+          statusCode: 202,
+          message: "Senha inválida!",
+        });
+      }
+      } catch (error) {
+        console.log("Error: ", error)
+      } 
+    
+  }
+
+
 }
 
 module.exports = new DataController();

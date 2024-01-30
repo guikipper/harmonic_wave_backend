@@ -9,7 +9,7 @@ const sendEmailVerification = (email, userId) => {
     
     const token = generateToken(userId);
     
-    const url = "https://expert-fortnight-vgpvrrggvg6c6q94-3000.app.github.dev"
+    const url = "https://laughing-rotary-phone-4gq7vvgqx9p35jvp-3000.app.github.dev"
     const validationLink = `${url}/validate?token=${token}`;
 
     const transport = nodemailer.createTransport({
