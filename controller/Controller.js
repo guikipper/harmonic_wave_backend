@@ -2,38 +2,39 @@ const { MongoClient, ObjectId } = require("mongodb");
 const getCollection = require("../db/connect");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const sendEmailVerification = require("../utils/sendMail");
+const sendEmailVerification = require("../utils/sendVerificationEmail");
 const getUser = require("../utils/getUser");
+const verifyPassword = require("../utils/verifyPassword")
+const decodeToken = require("../utils/decodeTokenJWT")
+const getUserByEmail = require('../utils/getUserByEmail')
+const createTokenJWT = require('../utils/createTokenJWT')
+const encryptPassword = require('../utils/encryptPassword')
 
 class DataController {
+  
   async validateEmail(email, userId) {
     sendEmailVerification(email, userId);
   }
 
-  async insertId(id) {
-    const collection = await getCollection("Users", "LearnMusicDatabase");
-  }
-
   async createUser(req, res) {
+
     const userId = new ObjectId();
     try {
-      const { name, email } = req.body; //nome e email
-      const hashedPassword = await bcrypt.hash(req.body.password, 10); //senha
+      const { name, email, password } = req.body;
+      const hashedPassword = await encryptPassword(password);
 
-      const emailExists = await this.emailExists(email); //verifica se o email existe
-
-      const user = {
-        //preenche dados de usuário
-        _id: userId,
-        name,
-        email,
-        password: hashedPassword,
-        emailVerified: false,
-      };
+      const emailExists = await this.emailExists(email); 
 
       if (emailExists) {
         return res.status(400).json({ error: "E-mail já cadastrado" });
       } else {
+        const user = {
+          _id: userId,
+          name,
+          email,
+          password: hashedPassword,
+          emailVerified: false,
+        };
         this.insertUser(user, res);
         this.validateEmail(email, userId);
       }
@@ -45,10 +46,10 @@ class DataController {
 
   async insertUser(user, res) {
     try {
-      const collection = await getCollection("Users", "LearnMusicDatabase"); //local do banco que vai ser salvo
+      const collection = await getCollection("Users", "LearnMusicDatabase"); 
 
-      const result = await collection.insertOne(user); //inserção no banco
-      console.log("Usuário salvo:", result); // Exiba o usuário salvo no console
+      const result = await collection.insertOne(user);
+      console.log("Usuário salvo:", result);
 
       return res
         .status(201)
@@ -62,15 +63,8 @@ class DataController {
     }
   }
 
-  async teste(req, res) {
-    return res.json({
-      message: "Aqui chega",
-    });
-  }
-
   async emailExists(email) {
-    const collection = await getCollection("Users", "LearnMusicDatabase");
-    const existingUser = await collection.findOne({ email });
+    const existingUser = await getUserByEmail(email)
     return !!existingUser;
   }
 
@@ -81,8 +75,9 @@ class DataController {
       return res.status(400).send("Token ausente na solicitação");
     }
     try {
-      const decoded = await jwt.verify(token, "segredinho");
-      const userId = decoded.userId;
+      const decodedToken = decodeToken(token)
+      
+      const userId = decodedToken.userId;
       const user = await getUser(userId);
 
       if (user.length === 0) {
@@ -103,56 +98,101 @@ class DataController {
     }
   }
 
+  async authenticate(req, res) {
+    try {
+      const { token } = req.body
+      
+      const decoded = decodeToken(token)
+      const userId = decoded.userId
+
+      const existingUser = await getUser(userId)
+
+      if (!userId) {
+        return res.status(402).send("userId não encontrado")
+      }
+
+      const userData = {
+        name: existingUser.name,
+        email: existingUser.email
+      }
+
+      return res.status(201).json({
+          statusCode: 201,
+          message: "Usuário autenticado sucesso",
+          userData: userData
+        });
+
+    } catch (error) {
+      console.error('Erro ao processar a requisição:', error);
+      return res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  }
+
   async login(req, res) {
-    const { email, password } = req.body;
+    try {
 
-    const collection = await getCollection("Users", "LearnMusicDatabase");
-    const existingUser = await collection.findOne({ email });
-    if (existingUser) {
-      if (existingUser.emailVerified === true) {
-        const isMatch = await bcrypt.compare(
-          req.body.password,
-          existingUser.password
-        );
+      console.log("Em login no servidor")
+      const { email, password } = req.body;
+      console.log(email, password)
+  
+      const existingUser = await getUserByEmail(email)
+      console.log('existingUser? ',existingUser)
 
-        if (isMatch) {
-          return res.status(201).json({
-            statusCode: 201,
-            message: "Usuário autenticado!",
-            userId: existingUser._id,
-            email: email,
-            username: existingUser.name,
-          });
-        } else {
-          return res.status(201).json({
-            statusCode: 206,
-            message: "Email e/ou senha incorretos!",
-          });
-        }
-      } else {
-        return res.status(201).json({
-          statusCode: 204,
-          message: "Endereço de Email não verificado!",
+      if (!existingUser) {
+        return res.status(404).json({ statusCode: 205, message: "Usuário não cadastrado!" });
+      }
+      
+      if (!existingUser.emailVerified) {
+        return res.status(401).json({
+            statusCode: 204,
+            message: "Endereço de Email não verificado!",
         });
       }
-    } else {
-      return res.json({ statusCode: 205, message: "Usuário não cadastrado!" });
+      
+      const isMatch = await verifyPassword(password, existingUser.password)
+      console.log("O isMatch: ", isMatch)
+      if (!isMatch) {
+          return res.status(401).json({
+              statusCode: 206,
+              message: "Email e/ou senha incorretos!",
+          });
+      }
+  
+      const jwtToken = createTokenJWT(existingUser._id.toString())
+  
+      if(!jwtToken) {
+        console.log("Problema da geração do Token")
+      }
+  
+      return res.status(200).json({
+          statusCode: 201,
+          message: "Usuário autenticado!",
+          token: jwtToken, // O token JWT gerado
+      });
+    } catch (error) {
+      console.error('Erro ao processar a requisição:', error);
+      return res.status(500).json({ message: 'Erro interno do servidor' });
     }
+   
   }
 
   async changeName(req, res) {
     const collection = await getCollection("Users", "LearnMusicDatabase");
-    const userId = req.body.userId;
-    const newName = req.body.newName;
-    const oldName = req.body.name;
+    const { newName, oldName } = req.body
+    const authHeader = req.headers.authorization;
 
-    const filter = { _id: new ObjectId(userId) };
-    const update = {
-      $set: {
-        name: newName,
-        oldName: oldName,
-      },
-    };
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7, authHeader.length);
+      const decodedToken = decodeToken(token)   
+      const userId = decodedToken.userId;
+
+      const filter = { _id: new ObjectId(userId) };
+      const update = {
+        $set: {
+          name: newName,
+          oldName: oldName,
+        },
+      };
 
     const result = await collection.findOneAndUpdate(filter, update, {
       returnDocument: "after",
@@ -174,6 +214,15 @@ class DataController {
       message: "Nome alterado com sucesso!",
       newName: userDataResponse.name,
     });
+    }
+
+    
+  }
+
+  async getLogin(req, res) {
+    res.json({
+      message: "aqui chega"
+    })
   }
 
   async changePassword(req, res) {
@@ -226,9 +275,6 @@ class DataController {
       
       
       const user = await collection.findOne({ _id: new ObjectId(userId) });
-      console.log(req.body)
-      console.log(user)
-      console.log('a senha do usuário: ', user.password)
       const isMatch = await bcrypt.compare(password, user.password);
       console.log("Deu match? ", isMatch)
     

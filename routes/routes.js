@@ -8,6 +8,7 @@ router.post('/validate/:token', dataController.validateLink)
 router.post('/changeName', dataController.changeName)
 router.post('/changePassword', dataController.changePassword)
 router.post('/deleteAccount', dataController.deleteAccount)
+router.post('/authenticate', dataController.authenticate)
 
 module.exports = router
 
