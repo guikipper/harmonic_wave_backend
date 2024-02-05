@@ -9,6 +9,8 @@ router.post('/changeName', dataController.changeName)
 router.post('/changePassword', dataController.changePassword)
 router.post('/deleteAccount', dataController.deleteAccount)
 router.post('/authenticate', dataController.authenticate)
+router.post('/sendPasswordRecovery', dataController.sendPasswordRecovery)
+router.post('/recoverPassword', dataController.recoverPassword)
 
 module.exports = router
 

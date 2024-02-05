@@ -9,6 +9,8 @@ const decodeToken = require("../utils/decodeTokenJWT")
 const getUserByEmail = require('../utils/getUserByEmail')
 const createTokenJWT = require('../utils/createTokenJWT')
 const encryptPassword = require('../utils/encryptPassword')
+const newPasswordEmail = require('../utils/newPasswordEmail')
+const decodeTokenRecoverPassword = require('../utils/decodeTokenRecoverPassword')
 
 class DataController {
   
@@ -150,7 +152,7 @@ class DataController {
       }
       
       const isMatch = await verifyPassword(password, existingUser.password)
-      console.log("O isMatch: ", isMatch)
+
       if (!isMatch) {
           return res.status(401).json({
               statusCode: 206,
@@ -219,24 +221,176 @@ class DataController {
     
   }
 
-  async getLogin(req, res) {
-    res.json({
-      message: "aqui chega"
-    })
+  async changePassword(req, res) {
+    
+    const collection = await getCollection("Users", "LearnMusicDatabase");
+    const { password, newPassword } = req.body;
+    const authHeader = req.headers.authorization; 
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7, authHeader.length);
+      const decodedToken = decodeToken(token)   
+      const userId = decodedToken.userId;
+      console.log("O userId em changePassword: ", userId)
+
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      const isMatch = await bcrypt.compare(password, user.password);
+
+      if (isMatch) {
+
+        const hashedNewPassword = await encryptPassword(newPassword)
+        console.log("A nova senha codificada: ", hashedNewPassword)
+        const filter = { _id: new ObjectId(userId) };
+        const update = {
+          $set: {
+            password: hashedNewPassword,
+          },
+        };
+  
+        const result = await collection.findOneAndUpdate(filter, update, {
+          returnDocument: "after",
+          upsert: false,
+        });
+  
+        if (!result) {
+          return res.status(501).json({
+            message: "Erro ao alterar a senha do usuário!",
+          });
+        }
+
+        console.log("Senha alterada com sucesso!")
+
+        return res.status(201).json({
+          statusCode: 201,
+          message: "Senha alterada com sucesso!",
+        });
+  
+      } else {
+          return res.status(201).json({
+              statusCode: 202,
+              message: "Senha atual inválida!",
+            });
+      }
+    }
+
   }
 
-  async changePassword(req, res) {
-    const collection = await getCollection("Users", "LearnMusicDatabase");
-    const { userId, password, newPassword } = req.body;
-    const user = await collection.findOne({ _id: new ObjectId(userId) });
-    const isMatch = await bcrypt.compare(password, user.password);
-    console.log('A SENHA: ', password)
-      console.log('O userID: ', userId)
-      console.log(req.body)
-    console.log("Deu match? ", isMatch)
-    if (isMatch) {
+  async deleteAccount(req, res) {
 
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    try {
+     const collection = await getCollection("Users", "LearnMusicDatabase"); 
+     const { password } = req.body
+     
+     const authHeader = req.headers.authorization;
+     const token = authHeader.substring(7, authHeader.length);
+     const decodedToken = decodeToken(token)   
+     const userId = decodedToken.userId;
+     
+     const user = await collection.findOne({ _id: new ObjectId(userId) });
+
+     console.log("Usuário existe: ", user)
+
+     if(!user) {
+       return res.status(401).json({
+         statusCode: 201,
+         message: "Usuário não encontrado!"
+       })
+     }
+
+     const isMatch = await bcrypt.compare(password, user.password);
+    
+     if (isMatch) {
+
+       const result = await collection.deleteOne({ _id: new ObjectId(userId) })
+       console.log(`DELETADO: ${result.deletedCount} documento(s) deletado(s)`);
+       
+       return res.status(201).json({
+         statusCode: 201,
+         message: "Usuário deletado com sucesso!"
+       })
+
+     } else {
+
+       console.log("Senha inválida!")
+       return res.status(401).json({
+         message: "Senha inválida!",
+       });
+     }
+
+     } catch (error) {
+       console.log("Error: ", error)
+     } 
+    
+  }
+
+  async sendPasswordRecovery(req, res) {
+    try {
+      const { email } = req.body
+      const existingUser = await getUserByEmail(email)
+
+      if(!existingUser) {
+        console.log("Usuário não existe!")
+          return res.status(404).json({
+            message: "Email não encontrado na base de dados!",
+        });
+      }
+
+      const userId = existingUser._id.toString()
+      const result = await newPasswordEmail(email, userId)
+
+      return res.status(201).json({
+        message: "Email enviado com sucesso!",
+      });
+
+    } catch (error) {
+      return res.status(500).json({
+        message: "Erro: ", error,
+      });
+    }
+  }
+
+  async recoverPassword(req, res) {
+    
+    const authHeader = req.headers.authorization;
+    const token = authHeader.substring(7, authHeader.length);
+    const decodedToken = decodeTokenRecoverPassword(token) 
+    const newPassword = req.body.newPassword
+
+    if (decodedToken.error == "Token has expired.") {
+    return res.status(401).json({
+      message: "Erro: Token expirado.",
+    });
+    }
+    if (decodedToken.error == "Invalid token.") {
+      return res.status(401).json({
+        message: "Erro: Token inválido.",
+      });
+    }
+    if (decodedToken.error == "Failed to authenticate token.") {
+      return res.status(401).json({
+        message: "Erro: Falha ao autenticar o token.",
+      });
+    }
+     
+    const userId = decodedToken.userId;
+
+    const existingUser = await getUser(userId)
+
+      if (!existingUser) {
+        return res.status(401).json({
+          message: "Usuário não encontrado!",
+        });
+      }
+
+      const isMatch = await bcrypt.compare(newPassword, existingUser.password);
+
+      if (isMatch) {
+        return res.status(401).json({
+          message: "Por segurança, escolha uma senha diferente da atual.",
+        });
+      }
+      const collection = await getCollection("Users", "LearnMusicDatabase"); 
+      const hashedNewPassword = await encryptPassword(newPassword)
       const filter = { _id: new ObjectId(userId) };
       const update = {
         $set: {
@@ -244,60 +398,17 @@ class DataController {
         },
       };
 
-      const result = await collection.findOneAndUpdate(filter, update, {
-        returnDocument: "after",
-        upsert: false,
-      });
+    const result = await collection.findOneAndUpdate(filter, update, {
+      returnDocument: "after",
+      upsert: false, // Não criar um novo documento se nenhum for encontrado
+    });
 
-      if (!result) {
-        return res.status(501).json({
-          message: "Erro ao alterar a senha do usuário!",
-        });
-      }
-      console.log("Senha alterada com sucesso!")
-      return res.status(201).json({
-        statusCode: 201,
-        message: "Senha alterada com sucesso!",
-      });
+    console.log("Senha alterada com sucesso!")
+    return res.status(201).json({
+      message: "Senha alterada com sucesso!",
+    });
 
-    } else {
-        return res.status(201).json({
-            statusCode: 202,
-            message: "Senha atual inválida!",
-          });
-    }
   }
-
-  async deleteAccount(req, res) {
-    try {
-      const collection = await getCollection("Users", "LearnMusicDatabase");
-      const { password, userId } = req.body
-      
-      
-      const user = await collection.findOne({ _id: new ObjectId(userId) });
-      const isMatch = await bcrypt.compare(password, user.password);
-      console.log("Deu match? ", isMatch)
-    
-      if (isMatch) {
-        const result = await collection.deleteOne({ _id: new ObjectId(userId) })
-        console.log(`${result.deletedCount} documento(s) deletado(s)`);
-        return res.status(201).json({
-          statusCode: 201,
-          message: "Usuário deletado com sucesso!"
-        })
-      } else {
-        console.log("Senha inválida!")
-        return res.status(201).json({
-          statusCode: 202,
-          message: "Senha inválida!",
-        });
-      }
-      } catch (error) {
-        console.log("Error: ", error)
-      } 
-    
-  }
-
 
 }
 
