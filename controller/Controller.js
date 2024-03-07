@@ -349,6 +349,10 @@ class DataController {
     }
   }
 
+  async testeGet(req, res) {
+    res.send('Route is working!!!')
+  }
+
   async recoverPassword(req, res) {
     
     const authHeader = req.headers.authorization;

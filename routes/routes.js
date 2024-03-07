@@ -11,6 +11,7 @@ router.post('/deleteAccount', dataController.deleteAccount)
 router.post('/authenticate', dataController.authenticate)
 router.post('/sendPasswordRecovery', dataController.sendPasswordRecovery)
 router.post('/recoverPassword', dataController.recoverPassword)
+router.get('/testeGet', dataController.testeGet)
 
 module.exports = router
 
